@@ -21,28 +21,30 @@ from ..extension import Extension, register_extension
 
 __all__ = []
 
-
 def get_max_cuda_arch():
-    """Select the maximum CUDA arch supported
+    """Select the maximum CUDA arch supported.
 
     This is a combination of the CUDA and pytorch version and all detected devices capabilities.
     """
+    import re
+
     capability_list = []
-    supported_sm = [int(arch.split("_")[1]) for arch in torch.cuda.get_arch_list() if "sm_" in arch]
+    # Filter out non-numeric CUDA arch strings safely
+    supported_sm = [
+        int(re.match(r"sm_(\d+)", arch).group(1))
+        for arch in torch.cuda.get_arch_list()
+        if re.match(r"sm_(\d+)", arch)
+    ]
     if supported_sm:
         max_supported_sm = max((sm // 10, sm % 10) for sm in supported_sm)
         for i in range(torch.cuda.device_count()):
             capability = torch.cuda.get_device_capability(i)
-            # Capability of the device may be higher than what's supported by the user's
-            # NVCC, causing compilation error. User's NVCC is expected to match the one
-            # used to build pytorch, so we use the maximum supported capability of pytorch
-            # to clamp the capability.
+            # Clamp the capability based on maximum supported by PyTorch
             capability = min(max_supported_sm, capability)
             if capability not in capability_list:
                 capability_list.append(capability)
     max_capability = max(sorted(capability_list)) if len(capability_list) > 0 else (0, 0)
     return f"{max_capability[0]}{max_capability[1]}0"
-
 
 extra_cflags = ["-g", "-O3"]
 extra_cuda_cflags = [
